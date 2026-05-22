@@ -15,6 +15,12 @@ import asyncio
 import json
 import logging
 import os
+# --- Railway: load service account from env var ---
+_sa_json = os.getenv("SERVICE_ACCOUNT_JSON")
+if _sa_json:
+    with open("service_account.json", "w") as _f:
+        _f.write(_sa_json)
+# ---------------------------------------------------
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
