@@ -46,6 +46,9 @@ log = logging.getLogger(__name__)
 # ENV / CONSTANTS
 # ═══════════════════════════════════════════════════════════════
 
+from dotenv import load_dotenv
+load_dotenv()
+
 BOT_TOKEN            = os.getenv("BOT_TOKEN", "")
 SERVICE_ACCOUNT_FILE = os.getenv("SERVICE_ACCOUNT_FILE", "service_account.json")
 DATA_FILE            = os.getenv("DATA_FILE", "data.json")
