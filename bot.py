@@ -325,10 +325,16 @@ class GoogleAPI:
         log.info("Google API ready — %s", creds.service_account_email)
 
     def _create_spreadsheet(self, title: str) -> dict:
-        res = self._sheets.spreadsheets().create(
-            body={"properties": {"title": title}}
+        # Drive API works where Sheets API create is blocked for service accounts
+        import logging as _lg
+        _lg.getLogger(__name__).info("Creating spreadsheet via Drive API: %s", title)
+        res = self._drive.files().create(
+            body={"name": title, "mimeType": "application/vnd.google-apps.spreadsheet"},
+            fields="id,webViewLink",
         ).execute()
-        return {"id": res["spreadsheetId"], "url": res["spreadsheetUrl"]}
+        fid = res["id"]
+        url = res.get("webViewLink", f"https://docs.google.com/spreadsheets/d/{fid}/edit")
+        return {"id": fid, "url": url}
 
     def _share_anyone_write(self, file_id: str):
         self._drive.permissions().create(
@@ -550,29 +556,32 @@ async def cmd_testapi(msg: Message):
         await msg.answer(f"2️⃣ Credentials: ❌\n`{e}`", parse_mode="Markdown")
         return
 
-    # 3. Sheets API
+    # 3. Create sheet via Drive API
+    created_id = None
     try:
-        sh  = build("sheets", "v4", credentials=creds)
-        res = sh.spreadsheets().create(body={"properties": {"title": "_API_TEST_"}}).execute()
-        await msg.answer(f"3️⃣ Sheets API: ✅\nCreated: `{res['spreadsheetId']}`\nDelete it manually.", parse_mode="Markdown")
+        dr2 = build("drive", "v3", credentials=creds)
+        res = dr2.files().create(
+            body={"name": "_API_TEST_", "mimeType": "application/vnd.google-apps.spreadsheet"},
+            fields="id,webViewLink",
+        ).execute()
+        created_id = res["id"]
+        await msg.answer(f"3️⃣ Create Sheet (Drive): ✅\nID: `{created_id}`", parse_mode="Markdown")
     except Exception as e:
-        await msg.answer(f"3️⃣ Sheets API: ❌\n`{e}`", parse_mode="Markdown")
+        await msg.answer(f"3️⃣ Create Sheet (Drive): ❌\n`{e}`", parse_mode="Markdown")
 
-    # 4. Drive API
+    # 4. Script API — create bound project
     try:
-        dr = build("drive", "v3", credentials=creds)
-        dr.files().list(pageSize=1).execute()
-        await msg.answer("4️⃣ Drive API: ✅")
+        if created_id:
+            sc = build("script", "v1", credentials=creds)
+            sp = sc.projects().create(body={"title": "_TEST_SCRIPT_", "parentId": created_id}).execute()
+            await msg.answer(f"4️⃣ Script API: ✅\nScript ID: `{sp['scriptId']}`", parse_mode="Markdown")
+        else:
+            await msg.answer("4️⃣ Script API: ⏭ skipped (no sheet)")
     except Exception as e:
-        await msg.answer(f"4️⃣ Drive API: ❌\n`{e}`", parse_mode="Markdown")
+        await msg.answer(f"4️⃣ Script API: ❌\n`{e}`", parse_mode="Markdown")
 
-    # 5. Script API
-    try:
-        sc = build("script", "v1", credentials=creds)
-        sc.projects().list().execute()
-        await msg.answer("5️⃣ Script API: ✅")
-    except Exception as e:
-        await msg.answer(f"5️⃣ Script API: ❌\n`{e}`", parse_mode="Markdown")
+    if created_id:
+        await msg.answer(f"🧹 Delete test sheet manually:\nhttps://docs.google.com/spreadsheets/d/{created_id}/edit")
 
 
 @router.callback_query(F.data == "cancel")
