@@ -273,8 +273,8 @@ def build_manifest(library_symbol: str, script_id: str) -> str:
     return json.dumps({
         "timeZone": "Europe/London",
         "dependencies": {"libraries": [{
-            "userSymbol": library_symbol, "scriptId": script_id,
-            "version": "0", "developmentMode": True,
+            "userSymbol": library_symbol, "libraryId": script_id,
+            "version": "1", "developmentMode": True,
         }]},
         "exceptionLogging": "STACKDRIVER",
         "runtimeVersion": "V8",
