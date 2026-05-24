@@ -465,6 +465,34 @@ async def cmd_admin(msg: Message):
     if storage.is_admin(msg.from_user.id):
         await msg.answer("👑 Admin Panel", reply_markup=kb_admin_home())
 
+ @router.message(Command("testapi"))
+async def cmd_testapi(msg: Message):
+    if not storage.is_admin(msg.from_user.id): return
+    # 1. Файл
+    sa = Path(SERVICE_ACCOUNT_FILE)
+    await msg.answer(f"1. File: {'✅ exists' if sa.exists() else '❌ MISSING'} ({sa.stat().st_size if sa.exists() else 0} bytes)")
+    if not sa.exists(): return
+    # 2. Credentials
+    try:
+        creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=GOOGLE_SCOPES)
+        await msg.answer(f"2. Creds: ✅\nEmail: `{creds.service_account_email}`", parse_mode="Markdown")
+    except Exception as e:
+        return await msg.answer(f"2. Creds: ❌\n`{e}`", parse_mode="Markdown")
+    # 3. Sheets
+    try:
+        sh  = build("sheets", "v4", credentials=creds)
+        res = sh.spreadsheets().create(body={"properties": {"title": "_TEST_"}}).execute()
+        await msg.answer(f"3. Sheets API: ✅\nID: `{res['spreadsheetId']}`", parse_mode="Markdown")
+    except Exception as e:
+        await msg.answer(f"3. Sheets API: ❌\n`{e}`", parse_mode="Markdown")
+    # 4. Script API
+    try:
+        sc = build("script", "v1", credentials=creds)
+        sc.projects().list().execute()
+        await msg.answer("4. Script API: ✅")
+    except Exception as e:
+        await msg.answer(f"4. Script API: ❌\n`{e}`", parse_mode="Markdown")
+
 @router.callback_query(F.data == "cancel")
 async def cb_cancel(cb: CallbackQuery, state: FSMContext):
     await state.clear()
