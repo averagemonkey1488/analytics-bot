@@ -1,46 +1,36 @@
 #!/usr/bin/env python3
-"""
-TD Analytics Toolkit Bot
-Supports: Cellexpert (ChinCore), ReferOn (TDCore),
-          Affilka Standard (TDCoreV5), Affilka FB (FBCore)
-"""
+"""TD Analytics Toolkit Bot"""
 
 import asyncio
 import json
 import logging
 import os
+from datetime import datetime
+from pathlib import Path
+from typing import Optional
 
-# ── Service account: write JSON file from env var ──────────────
+# ── write service_account.json from env var ──────────────────
 _sa_raw = os.getenv("SERVICE_ACCOUNT_JSON", "")
 if _sa_raw:
     try:
-        _sa_data = json.loads(_sa_raw)          # parse → fixes \n in private_key
+        _sa_data = json.loads(_sa_raw)
         with open("service_account.json", "w") as _f:
             json.dump(_sa_data, _f, indent=2)
         print("service_account.json written OK")
     except Exception as _e:
         print(f"WARNING: could not parse SERVICE_ACCOUNT_JSON: {_e}")
-# ───────────────────────────────────────────────────────────────
-
-from datetime import datetime
-from pathlib import Path
-from typing import Optional
+# ─────────────────────────────────────────────────────────────
 
 from aiogram import Bot, Dispatcher, F, Router
 from aiogram.filters import CommandStart, Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.types import (
-    CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message,
-)
+from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
 log = logging.getLogger(__name__)
 
 # ═══════════════════════════════════════════════════════════════
@@ -141,6 +131,7 @@ PLATFORMS: dict = {
 
 WIZARD_STEPS = ["webname", "creo", "clickid", "target_oas", "min_ftd_gate", "hr_top_percent"]
 
+
 # ═══════════════════════════════════════════════════════════════
 # GAS SCRIPT GENERATOR
 # ═══════════════════════════════════════════════════════════════
@@ -175,18 +166,28 @@ def build_loader_script(platform_key: str) -> str:
         "    .addItem('✅ Test Connection',     '_runPing')",
     ]
 
-    def fn(name, call): return f"function {name}() {{ {sym}.{call}(); }}"
+    def fn(name, call):
+        return f"function {name}() {{ {sym}.{call}(); }}"
 
     fns = [
-        fn("_runQuality", api["quality"]), fn("_runOAS", api["oas"]),
-        fn("_runExport", api["export"]),   fn("_runRootIndex", api["root_index"]),
-        fn("_runExConfig", api["ex_config"]), fn("_runDebugMap", api["debug_map"]),
-        fn("_runStop", api["stop"]),       fn("_runReset", api["reset"]),
+        fn("_runQuality", api["quality"]),
+        fn("_runOAS", api["oas"]),
+        fn("_runExport", api["export"]),
+        fn("_runRootIndex", api["root_index"]),
+        fn("_runExConfig", api["ex_config"]),
+        fn("_runDebugMap", api["debug_map"]),
+        fn("_runStop", api["stop"]),
+        fn("_runReset", api["reset"]),
         f"function EX_exportChunk_Loader() {{ {sym}.{api['chunk']}(); }}",
     ]
     if platform_key == "affilka_fb":
         fns += [fn("_runNormalize", api["normalize"]), fn("_runDebugRaw", api["debug_raw"])]
-    fns.append(f"function _runPing() {{\n  var r = {sym}.{api['ping']}();\n  SpreadsheetApp.getUi().alert(r);\n}}")
+    fns.append(
+        f"function _runPing() {{\n"
+        f"  var r = {sym}.{api['ping']}();\n"
+        f"  SpreadsheetApp.getUi().alert(r);\n"
+        f"}}"
+    )
 
     nl = "\n"
     return (
@@ -196,7 +197,8 @@ def build_loader_script(platform_key: str) -> str:
         f"  var ui = SpreadsheetApp.getUi();\n"
         f"  ui.createMenu('📊 ANALYSIS')\n{nl.join(analysis_items)}\n    .addToUi();\n"
         f"  ui.createMenu('🛠 TECH PANEL')\n{nl.join(tech_items)}\n    .addToUi();\n"
-        f"}}\n\n" + "\n".join(fns)
+        f"}}\n\n"
+        + "\n".join(fns)
     )
 
 
@@ -204,8 +206,10 @@ def build_manifest(library_symbol: str, script_id: str) -> str:
     return json.dumps({
         "timeZone": "Europe/London",
         "dependencies": {"libraries": [{
-            "userSymbol": library_symbol, "scriptId": script_id,
-            "version": "0", "developmentMode": True,
+            "userSymbol": library_symbol,
+            "scriptId": script_id,
+            "version": "0",
+            "developmentMode": True,
         }]},
         "exceptionLogging": "STACKDRIVER",
         "runtimeVersion": "V8",
@@ -231,49 +235,79 @@ class Storage:
         with open(self._path, "w", encoding="utf-8") as f:
             json.dump(self._d, f, indent=2, ensure_ascii=False)
 
-    def is_admin(self, uid: int) -> bool: return uid in self._d["admins"]
+    def is_admin(self, uid: int) -> bool:
+        return uid in self._d["admins"]
+
     def add_admin(self, uid: int):
         if uid and uid not in self._d["admins"]:
-            self._d["admins"].append(uid); self._save()
+            self._d["admins"].append(uid)
+            self._save()
 
     def add_mother_sheet(self, sheet_id, name, script_id, platform) -> dict:
-        entry = {"id": sheet_id, "name": name, "script_id": script_id, "platform": platform,
-                 "library_symbol": PLATFORMS[platform]["library_symbol"],
-                 "created_at": datetime.utcnow().isoformat()}
-        self._d["mother_sheets"][sheet_id] = entry; self._save(); return entry
+        entry = {
+            "id": sheet_id, "name": name, "script_id": script_id,
+            "platform": platform, "library_symbol": PLATFORMS[platform]["library_symbol"],
+            "created_at": datetime.utcnow().isoformat(),
+        }
+        self._d["mother_sheets"][sheet_id] = entry
+        self._save()
+        return entry
 
-    def get_mother_sheet(self, sid: str) -> Optional[dict]: return self._d["mother_sheets"].get(sid)
-    def all_mother_sheets(self) -> dict: return self._d["mother_sheets"]
-    def remove_mother_sheet(self, sid: str): self._d["mother_sheets"].pop(sid, None); self._save()
+    def get_mother_sheet(self, sid: str) -> Optional[dict]:
+        return self._d["mother_sheets"].get(sid)
+
+    def all_mother_sheets(self) -> dict:
+        return self._d["mother_sheets"]
+
+    def remove_mother_sheet(self, sid: str):
+        self._d["mother_sheets"].pop(sid, None)
+        self._save()
 
     def add_partner(self, uid: int, name: str, username: str = "") -> dict:
-        entry = {"telegram_id": uid, "name": name, "username": username,
-                 "assigned_sheet_ids": [], "child_sheets": [], "active": True,
-                 "created_at": datetime.utcnow().isoformat()}
-        self._d["partners"][str(uid)] = entry; self._save(); return entry
+        entry = {
+            "telegram_id": uid, "name": name, "username": username,
+            "assigned_sheet_ids": [], "child_sheets": [], "active": True,
+            "created_at": datetime.utcnow().isoformat(),
+        }
+        self._d["partners"][str(uid)] = entry
+        self._save()
+        return entry
 
-    def get_partner(self, uid: int) -> Optional[dict]: return self._d["partners"].get(str(uid))
-    def all_partners(self) -> dict: return self._d["partners"]
+    def get_partner(self, uid: int) -> Optional[dict]:
+        return self._d["partners"].get(str(uid))
+
+    def all_partners(self) -> dict:
+        return self._d["partners"]
 
     def update_partner(self, uid: int, patch: dict):
         p = self.get_partner(uid)
-        if p: p.update(patch); self._d["partners"][str(uid)] = p; self._save()
+        if p:
+            p.update(patch)
+            self._d["partners"][str(uid)] = p
+            self._save()
 
     def assign_sheet(self, uid: int, sid: str):
         p = self.get_partner(uid)
-        if p and sid not in p["assigned_sheet_ids"]: p["assigned_sheet_ids"].append(sid); self._save()
+        if p and sid not in p["assigned_sheet_ids"]:
+            p["assigned_sheet_ids"].append(sid)
+            self._save()
 
     def unassign_sheet(self, uid: int, sid: str):
         p = self.get_partner(uid)
-        if p and sid in p["assigned_sheet_ids"]: p["assigned_sheet_ids"].remove(sid); self._save()
+        if p and sid in p["assigned_sheet_ids"]:
+            p["assigned_sheet_ids"].remove(sid)
+            self._save()
 
     def add_child_sheet(self, uid: int, child: dict):
         p = self.get_partner(uid)
-        if p: p["child_sheets"].append(child); self._save()
+        if p:
+            p["child_sheets"].append(child)
+            self._save()
 
     def partner_assigned_sheets(self, uid: int) -> list:
         p = self.get_partner(uid)
-        if not p: return []
+        if not p:
+            return []
         return [self.get_mother_sheet(s) for s in p["assigned_sheet_ids"] if self.get_mother_sheet(s)]
 
 
@@ -288,18 +322,15 @@ class GoogleAPI:
         self._sheets = build("sheets", "v4", credentials=creds)
         self._drive  = build("drive",  "v3", credentials=creds)
         self._script = build("script", "v1", credentials=creds)
-        log.info("Google API clients initialized OK")
+        log.info("Google API ready — %s", creds.service_account_email)
 
     def _create_spreadsheet(self, title: str) -> dict:
-        log.info("Creating spreadsheet: %s", title)
         res = self._sheets.spreadsheets().create(
             body={"properties": {"title": title}}
         ).execute()
-        log.info("Spreadsheet created: %s", res["spreadsheetId"])
         return {"id": res["spreadsheetId"], "url": res["spreadsheetUrl"]}
 
     def _share_anyone_write(self, file_id: str):
-        log.info("Sharing %s (anyone write)", file_id)
         self._drive.permissions().create(
             fileId=file_id,
             body={"type": "anyone", "role": "writer"},
@@ -307,15 +338,12 @@ class GoogleAPI:
         ).execute()
 
     def _create_bound_script(self, spreadsheet_id: str, title: str) -> str:
-        log.info("Creating bound script for %s", spreadsheet_id)
         res = self._script.projects().create(
             body={"title": title, "parentId": spreadsheet_id}
         ).execute()
-        log.info("Script created: %s", res["scriptId"])
         return res["scriptId"]
 
     def _push_script_files(self, script_id: str, loader_js: str, manifest_json: str):
-        log.info("Pushing script files to %s", script_id)
         self._script.projects().updateContent(
             scriptId=script_id,
             body={"files": [
@@ -323,19 +351,16 @@ class GoogleAPI:
                 {"name": "Loader",     "type": "SERVER_JS", "source": loader_js},
             ]},
         ).execute()
-        log.info("Script files pushed OK")
 
     def create_child_sheet(self, partner_name: str, platform_key: str, mother: dict) -> dict:
         plat  = PLATFORMS[platform_key]
         title = f"{partner_name} — {plat['name']} Analytics"
-
         ss        = self._create_spreadsheet(title)
         loader    = build_loader_script(platform_key)
         manifest  = build_manifest(plat["library_symbol"], mother["script_id"])
         script_id = self._create_bound_script(ss["id"], f"{title} Script")
         self._push_script_files(script_id, loader, manifest)
         self._share_anyone_write(ss["id"])
-
         return {
             "spreadsheet_id":  ss["id"],
             "spreadsheet_url": ss["url"],
@@ -351,65 +376,99 @@ class GoogleAPI:
 # ═══════════════════════════════════════════════════════════════
 
 class AdminSt(StatesGroup):
-    add_partner_id = State(); add_partner_name = State()
-    add_sheet_id   = State(); add_sheet_name   = State()
-    add_script_id  = State(); add_platform     = State()
+    add_partner_id   = State()
+    add_partner_name = State()
+    add_sheet_id     = State()
+    add_sheet_name   = State()
+    add_script_id    = State()
+    add_platform     = State()
+
 
 class PartnerSt(StatesGroup):
-    pick_mother = State(); config_step = State(); confirm = State()
+    pick_mother = State()
+    config_step = State()
+    confirm     = State()
 
 
 # ═══════════════════════════════════════════════════════════════
 # KEYBOARDS
 # ═══════════════════════════════════════════════════════════════
 
-def _ik(*rows): return InlineKeyboardMarkup(inline_keyboard=list(rows))
-def _btn(text, data): return InlineKeyboardButton(text=text, callback_data=data)
+def _ik(*rows):
+    return InlineKeyboardMarkup(inline_keyboard=list(rows))
+
+def _btn(text, data):
+    return InlineKeyboardButton(text=text, callback_data=data)
 
 def kb_admin_home():
-    return _ik([_btn("👥 Partners","adm_partners"), _btn("📋 Mother Sheets","adm_sheets")],
-               [_btn("🔗 Assign Sheets","adm_assign_sel")])
+    return _ik(
+        [_btn("👥 Partners", "adm_partners"), _btn("📋 Mother Sheets", "adm_sheets")],
+        [_btn("🔗 Assign Sheets", "adm_assign_sel")],
+    )
 
 def kb_admin_partners(partners):
-    rows = [[_btn(f"{'✅' if p.get('active') else '❌'} {p['name']} (@{p.get('username','?')})", f"adm_p_{uid}")]
-            for uid,p in list(partners.items())[:15]]
-    rows.append([_btn("➕ Add","adm_add_partner"), _btn("◀️ Back","adm_home")]); return _ik(*rows)
+    rows = [[_btn(f"{'✅' if p.get('active') else '❌'} {p['name']}", f"adm_p_{uid}")]
+            for uid, p in list(partners.items())[:15]]
+    rows.append([_btn("➕ Add", "adm_add_partner"), _btn("◀️ Back", "adm_home")])
+    return _ik(*rows)
 
 def kb_admin_sheets(sheets):
     rows = [[_btn(f"{PLATFORMS.get(s['platform'],{}).get('name','?')} — {s['name']}", f"adm_s_{sid}")]
-            for sid,s in list(sheets.items())[:15]]
-    rows.append([_btn("➕ Add","adm_add_sheet"), _btn("◀️ Back","adm_home")]); return _ik(*rows)
+            for sid, s in list(sheets.items())[:15]]
+    rows.append([_btn("➕ Add", "adm_add_sheet"), _btn("◀️ Back", "adm_home")])
+    return _ik(*rows)
 
 def kb_platforms():
-    rows = [[_btn(p["name"], f"plat_{k}")] for k,p in PLATFORMS.items()]
-    rows.append([_btn("❌ Cancel","cancel")]); return _ik(*rows)
+    rows = [[_btn(p["name"], f"plat_{k}")] for k, p in PLATFORMS.items()]
+    rows.append([_btn("❌ Cancel", "cancel")])
+    return _ik(*rows)
 
 def kb_field_options(field_key, options):
     rows, row = [], []
     for opt in options:
         row.append(_btn(opt, f"fld_{field_key}__{opt}"))
-        if len(row)==3: rows.append(row); row=[]
-    if row: rows.append(row)
+        if len(row) == 3:
+            rows.append(row)
+            row = []
+    if row:
+        rows.append(row)
     return _ik(*rows)
 
-def kb_oas():    return _ik([_btn("50%","fld_target_oas__50%"), _btn("55% ✦","fld_target_oas__55%"), _btn("60%","fld_target_oas__60%"), _btn("65%","fld_target_oas__65%")])
-def kb_ftd():    return _ik([_btn("3","fld_min_ftd_gate__3"), _btn("5 ✦","fld_min_ftd_gate__5"), _btn("10","fld_min_ftd_gate__10")])
-def kb_hr():     return _ik([_btn("1%","fld_hr_top_percent__1%"), _btn("2% ✦","fld_hr_top_percent__2%"), _btn("5%","fld_hr_top_percent__5%")])
-def kb_confirm():return _ik([_btn("✅ Create","do_create"), _btn("❌ Cancel","cancel")])
-def kb_partner_home(): return _ik([_btn("➕ Create New Sheet","p_create")], [_btn("📋 My Sheets","p_mysheets")])
+def kb_oas():
+    return _ik([_btn("50%", "fld_target_oas__50%"), _btn("55% ✦", "fld_target_oas__55%"),
+                _btn("60%", "fld_target_oas__60%"), _btn("65%", "fld_target_oas__65%")])
+
+def kb_ftd():
+    return _ik([_btn("3", "fld_min_ftd_gate__3"), _btn("5 ✦", "fld_min_ftd_gate__5"),
+                _btn("10", "fld_min_ftd_gate__10")])
+
+def kb_hr():
+    return _ik([_btn("1%", "fld_hr_top_percent__1%"), _btn("2% ✦", "fld_hr_top_percent__2%"),
+                _btn("5%", "fld_hr_top_percent__5%")])
+
+def kb_confirm():
+    return _ik([_btn("✅ Create", "do_create"), _btn("❌ Cancel", "cancel")])
+
+def kb_partner_home():
+    return _ik([_btn("➕ Create New Sheet", "p_create")], [_btn("📋 My Sheets", "p_mysheets")])
 
 def kb_select_mother(sheets):
-    rows = [[_btn(f"{PLATFORMS.get(s['platform'],{}).get('name','?')} — {s['name']}", f"p_mother_{s['id']}")] for s in sheets]
-    rows.append([_btn("❌ Cancel","cancel")]); return _ik(*rows)
+    rows = [[_btn(f"{PLATFORMS.get(s['platform'],{}).get('name','?')} — {s['name']}", f"p_mother_{s['id']}")]
+            for s in sheets]
+    rows.append([_btn("❌ Cancel", "cancel")])
+    return _ik(*rows)
 
 def kb_partner_sheets(kids):
-    rows = [[_btn(f"{PLATFORMS.get(c.get('platform',''),{}).get('name','?')} — {c.get('created_at','')[:10]}", f"p_child_{c['spreadsheet_id']}")] for c in kids[-15:]]
-    rows.append([_btn("◀️ Back","p_home")]); return _ik(*rows)
+    rows = [[_btn(f"{PLATFORMS.get(c.get('platform',''),{}).get('name','?')} — {c.get('created_at','')[:10]}",
+                  f"p_child_{c['spreadsheet_id']}")]
+            for c in kids[-15:]]
+    rows.append([_btn("◀️ Back", "p_home")])
+    return _ik(*rows)
 
 def kb_assign_sheets(partner, sheets):
-    assigned = partner.get("assigned_sheet_ids",[])
+    assigned = partner.get("assigned_sheet_ids", [])
     rows = []
-    for sid,s in sheets.items():
+    for sid, s in sheets.items():
         mark = "✅ " if sid in assigned else ""
         act  = f"unassign_{partner['telegram_id']}_{sid}" if sid in assigned else f"assign_{partner['telegram_id']}_{sid}"
         rows.append([_btn(f"{mark}{PLATFORMS.get(s['platform'],{}).get('name','?')} — {s['name']}", act)])
@@ -427,11 +486,12 @@ def _next_step(platform_key, config):
             return step
     return None
 
+
 async def _send_step(target, state, platform_key, config, step):
     field = PLATFORMS[platform_key]["fields"][step]
-    text  = f"⚙️ *{field['label']}*\nDefault: `{field.get('default','')}`"
-    kb = {"target_oas": kb_oas, "min_ftd_gate": kb_ftd, "hr_top_percent": kb_hr}.get(step)
-    if kb is None: kb = lambda: kb_field_options(step, field.get("options",[]))
+    text  = f"⚙️ *{field['label']}*\nDefault: `{field.get('default', '')}`"
+    kb_map = {"target_oas": kb_oas, "min_ftd_gate": kb_ftd, "hr_top_percent": kb_hr}
+    kb = kb_map.get(step, lambda: kb_field_options(step, field.get("options", [])))
     if isinstance(target, Message):
         await target.answer(text, parse_mode="Markdown", reply_markup=kb())
     else:
@@ -447,6 +507,7 @@ router  = Router()
 storage: Storage   = None
 gapi:    GoogleAPI = None
 
+
 # ── common ────────────────────────────────────────────────────
 
 @router.message(CommandStart())
@@ -455,129 +516,182 @@ async def cmd_start(msg: Message):
     if storage.is_admin(uid):
         await msg.answer("👑 Admin Panel", reply_markup=kb_admin_home())
     elif p := storage.get_partner(uid):
-        if not p.get("active"): return await msg.answer("❌ Account inactive. Contact admin.")
+        if not p.get("active"):
+            return await msg.answer("❌ Account inactive. Contact admin.")
         await msg.answer(f"👋 Welcome, {p['name']}!", reply_markup=kb_partner_home())
     else:
         await msg.answer("You are not registered. Contact the admin.")
+
 
 @router.message(Command("admin"))
 async def cmd_admin(msg: Message):
     if storage.is_admin(msg.from_user.id):
         await msg.answer("👑 Admin Panel", reply_markup=kb_admin_home())
 
- @router.message(Command("testapi"))
+
+@router.message(Command("testapi"))
 async def cmd_testapi(msg: Message):
-    if not storage.is_admin(msg.from_user.id): return
-    # 1. Файл
+    if not storage.is_admin(msg.from_user.id):
+        return
+
+    # 1. JSON file
     sa = Path(SERVICE_ACCOUNT_FILE)
-    await msg.answer(f"1. File: {'✅ exists' if sa.exists() else '❌ MISSING'} ({sa.stat().st_size if sa.exists() else 0} bytes)")
-    if not sa.exists(): return
+    exists = sa.exists()
+    size   = sa.stat().st_size if exists else 0
+    await msg.answer(f"1️⃣ File `{SERVICE_ACCOUNT_FILE}`: {'✅ exists' if exists else '❌ MISSING'} ({size} bytes)", parse_mode="Markdown")
+    if not exists:
+        return
+
     # 2. Credentials
     try:
         creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=GOOGLE_SCOPES)
-        await msg.answer(f"2. Creds: ✅\nEmail: `{creds.service_account_email}`", parse_mode="Markdown")
+        await msg.answer(f"2️⃣ Credentials: ✅\nEmail: `{creds.service_account_email}`", parse_mode="Markdown")
     except Exception as e:
-        return await msg.answer(f"2. Creds: ❌\n`{e}`", parse_mode="Markdown")
-    # 3. Sheets
+        await msg.answer(f"2️⃣ Credentials: ❌\n`{e}`", parse_mode="Markdown")
+        return
+
+    # 3. Sheets API
     try:
         sh  = build("sheets", "v4", credentials=creds)
-        res = sh.spreadsheets().create(body={"properties": {"title": "_TEST_"}}).execute()
-        await msg.answer(f"3. Sheets API: ✅\nID: `{res['spreadsheetId']}`", parse_mode="Markdown")
+        res = sh.spreadsheets().create(body={"properties": {"title": "_API_TEST_"}}).execute()
+        await msg.answer(f"3️⃣ Sheets API: ✅\nCreated: `{res['spreadsheetId']}`\nDelete it manually.", parse_mode="Markdown")
     except Exception as e:
-        await msg.answer(f"3. Sheets API: ❌\n`{e}`", parse_mode="Markdown")
-    # 4. Script API
+        await msg.answer(f"3️⃣ Sheets API: ❌\n`{e}`", parse_mode="Markdown")
+
+    # 4. Drive API
+    try:
+        dr = build("drive", "v3", credentials=creds)
+        dr.files().list(pageSize=1).execute()
+        await msg.answer("4️⃣ Drive API: ✅")
+    except Exception as e:
+        await msg.answer(f"4️⃣ Drive API: ❌\n`{e}`", parse_mode="Markdown")
+
+    # 5. Script API
     try:
         sc = build("script", "v1", credentials=creds)
         sc.projects().list().execute()
-        await msg.answer("4. Script API: ✅")
+        await msg.answer("5️⃣ Script API: ✅")
     except Exception as e:
-        await msg.answer(f"4. Script API: ❌\n`{e}`", parse_mode="Markdown")
+        await msg.answer(f"5️⃣ Script API: ❌\n`{e}`", parse_mode="Markdown")
+
 
 @router.callback_query(F.data == "cancel")
 async def cb_cancel(cb: CallbackQuery, state: FSMContext):
     await state.clear()
     uid = cb.from_user.id
-    if storage.is_admin(uid):   await cb.message.edit_text("Cancelled.", reply_markup=kb_admin_home())
-    elif storage.get_partner(uid): await cb.message.edit_text("Cancelled.", reply_markup=kb_partner_home())
-    else: await cb.message.edit_text("Cancelled.")
+    if storage.is_admin(uid):
+        await cb.message.edit_text("Cancelled.", reply_markup=kb_admin_home())
+    elif storage.get_partner(uid):
+        await cb.message.edit_text("Cancelled.", reply_markup=kb_partner_home())
+    else:
+        await cb.message.edit_text("Cancelled.")
     await cb.answer()
 
-# ── admin home ────────────────────────────────────────────────
+
+# ── admin ─────────────────────────────────────────────────────
 
 @router.callback_query(F.data == "adm_home")
 async def cb_adm_home(cb: CallbackQuery):
-    if not storage.is_admin(cb.from_user.id): return await cb.answer("No access", show_alert=True)
-    await cb.message.edit_text("👑 Admin Panel", reply_markup=kb_admin_home()); await cb.answer()
+    if not storage.is_admin(cb.from_user.id):
+        return await cb.answer("No access", show_alert=True)
+    await cb.message.edit_text("👑 Admin Panel", reply_markup=kb_admin_home())
+    await cb.answer()
 
-# ── partners ──────────────────────────────────────────────────
 
 @router.callback_query(F.data == "adm_partners")
 async def cb_adm_partners(cb: CallbackQuery):
-    if not storage.is_admin(cb.from_user.id): return await cb.answer("No access", show_alert=True)
+    if not storage.is_admin(cb.from_user.id):
+        return await cb.answer("No access", show_alert=True)
     pp = storage.all_partners()
-    await cb.message.edit_text(f"👥 Partners ({len(pp)})", reply_markup=kb_admin_partners(pp)); await cb.answer()
+    await cb.message.edit_text(f"👥 Partners ({len(pp)})", reply_markup=kb_admin_partners(pp))
+    await cb.answer()
+
 
 @router.callback_query(F.data == "adm_add_partner")
 async def cb_adm_add_partner(cb: CallbackQuery, state: FSMContext):
-    if not storage.is_admin(cb.from_user.id): return await cb.answer("No access", show_alert=True)
-    await cb.message.edit_text("Enter the partner's *Telegram ID* (number).\nForward their message to @userinfobot.", parse_mode="Markdown")
-    await state.set_state(AdminSt.add_partner_id); await cb.answer()
+    if not storage.is_admin(cb.from_user.id):
+        return await cb.answer("No access", show_alert=True)
+    await cb.message.edit_text("Enter partner's *Telegram ID*.\nForward their message to @userinfobot.", parse_mode="Markdown")
+    await state.set_state(AdminSt.add_partner_id)
+    await cb.answer()
+
 
 @router.message(AdminSt.add_partner_id)
 async def msg_partner_id(msg: Message, state: FSMContext):
-    try: uid = int(msg.text.strip())
-    except ValueError: return await msg.answer("❌ Must be a number:")
+    try:
+        uid = int(msg.text.strip())
+    except ValueError:
+        return await msg.answer("❌ Must be a number:")
     await state.update_data(new_uid=uid)
     await msg.answer(f"ID: `{uid}`\n\nEnter a *name*:", parse_mode="Markdown")
     await state.set_state(AdminSt.add_partner_name)
 
+
 @router.message(AdminSt.add_partner_name)
 async def msg_partner_name(msg: Message, state: FSMContext):
     data = await state.get_data()
-    storage.add_partner(data["new_uid"], msg.text.strip())
+    name = msg.text.strip()
+    storage.add_partner(data["new_uid"], name)
     await state.clear()
-    await msg.answer(f"✅ Partner *{msg.text.strip()}* added!", parse_mode="Markdown", reply_markup=kb_admin_home())
+    await msg.answer(f"✅ Partner *{name}* added!", parse_mode="Markdown", reply_markup=kb_admin_home())
+
 
 @router.callback_query(F.data.startswith("adm_p_"))
 async def cb_view_partner(cb: CallbackQuery):
-    if not storage.is_admin(cb.from_user.id): return await cb.answer("No access", show_alert=True)
-    uid = int(cb.data.replace("adm_p_",""))
+    if not storage.is_admin(cb.from_user.id):
+        return await cb.answer("No access", show_alert=True)
+    uid = int(cb.data.replace("adm_p_", ""))
     p   = storage.get_partner(uid)
-    if not p: return await cb.answer("Not found", show_alert=True)
+    if not p:
+        return await cb.answer("Not found", show_alert=True)
     assigned    = storage.partner_assigned_sheets(uid)
     sheets_text = "\n".join(f"  • {s['name']}" for s in assigned) or "  (none)"
     await cb.message.edit_text(
-        f"👤 *{p['name']}*\nID: `{uid}`\nStatus: {'✅ Active' if p.get('active') else '❌ Inactive'}\n"
-        f"Child sheets: {len(p.get('child_sheets',[]))}\n\nAssigned:\n{sheets_text}",
+        f"👤 *{p['name']}*\nID: `{uid}`\n"
+        f"Status: {'✅ Active' if p.get('active') else '❌ Inactive'}\n"
+        f"Child sheets: {len(p.get('child_sheets', []))}\n\nAssigned:\n{sheets_text}",
         parse_mode="Markdown",
         reply_markup=_ik(
             [_btn("🔗 Assign/Remove Sheets", f"adm_assign_{uid}")],
             [_btn("❌ Deactivate" if p.get("active") else "✅ Activate", f"adm_toggle_{uid}")],
-            [_btn("◀️ Back","adm_partners")],
-        )
-    ); await cb.answer()
+            [_btn("◀️ Back", "adm_partners")],
+        ),
+    )
+    await cb.answer()
+
 
 @router.callback_query(F.data.startswith("adm_toggle_"))
 async def cb_toggle(cb: CallbackQuery):
-    if not storage.is_admin(cb.from_user.id): return await cb.answer("No access", show_alert=True)
-    uid = int(cb.data.replace("adm_toggle_",""))
+    if not storage.is_admin(cb.from_user.id):
+        return await cb.answer("No access", show_alert=True)
+    uid = int(cb.data.replace("adm_toggle_", ""))
     p   = storage.get_partner(uid)
-    if p: storage.update_partner(uid, {"active": not p.get("active",True)}); await cb.answer("Updated ✅")
+    if p:
+        storage.update_partner(uid, {"active": not p.get("active", True)})
+        await cb.answer("Updated ✅")
     await cb_view_partner(cb)
 
-# ── mother sheets ─────────────────────────────────────────────
 
 @router.callback_query(F.data == "adm_sheets")
 async def cb_adm_sheets(cb: CallbackQuery):
-    if not storage.is_admin(cb.from_user.id): return await cb.answer("No access", show_alert=True)
+    if not storage.is_admin(cb.from_user.id):
+        return await cb.answer("No access", show_alert=True)
     ss = storage.all_mother_sheets()
-    await cb.message.edit_text(f"📋 Mother Sheets ({len(ss)})", reply_markup=kb_admin_sheets(ss)); await cb.answer()
+    await cb.message.edit_text(f"📋 Mother Sheets ({len(ss)})", reply_markup=kb_admin_sheets(ss))
+    await cb.answer()
+
 
 @router.callback_query(F.data == "adm_add_sheet")
 async def cb_add_sheet(cb: CallbackQuery, state: FSMContext):
-    if not storage.is_admin(cb.from_user.id): return await cb.answer("No access", show_alert=True)
-    await cb.message.edit_text("Enter *Spreadsheet ID*\n_(URL: …/spreadsheets/d/`[ID]`/edit)_", parse_mode="Markdown")
-    await state.set_state(AdminSt.add_sheet_id); await cb.answer()
+    if not storage.is_admin(cb.from_user.id):
+        return await cb.answer("No access", show_alert=True)
+    await cb.message.edit_text(
+        "Enter *Spreadsheet ID*\n_(URL: …/spreadsheets/d/`[ID]`/edit)_",
+        parse_mode="Markdown",
+    )
+    await state.set_state(AdminSt.add_sheet_id)
+    await cb.answer()
+
 
 @router.message(AdminSt.add_sheet_id)
 async def msg_sheet_id(msg: Message, state: FSMContext):
@@ -585,11 +699,16 @@ async def msg_sheet_id(msg: Message, state: FSMContext):
     await msg.answer("Enter a *display name* (e.g. `Cellexpert Core`):", parse_mode="Markdown")
     await state.set_state(AdminSt.add_sheet_name)
 
+
 @router.message(AdminSt.add_sheet_name)
 async def msg_sheet_name(msg: Message, state: FSMContext):
     await state.update_data(sheet_name=msg.text.strip())
-    await msg.answer("Enter *Apps Script Project ID* (library).\nscript.google.com → ⚙️ Project Settings → Script ID", parse_mode="Markdown")
+    await msg.answer(
+        "Enter *Apps Script Project ID*.\nscript.google.com → ⚙️ Project Settings → Script ID",
+        parse_mode="Markdown",
+    )
     await state.set_state(AdminSt.add_script_id)
+
 
 @router.message(AdminSt.add_script_id)
 async def msg_script_id(msg: Message, state: FSMContext):
@@ -597,119 +716,178 @@ async def msg_script_id(msg: Message, state: FSMContext):
     await msg.answer("Select *platform*:", parse_mode="Markdown", reply_markup=kb_platforms())
     await state.set_state(AdminSt.add_platform)
 
+
 @router.callback_query(AdminSt.add_platform, F.data.startswith("plat_"))
 async def cb_sheet_platform(cb: CallbackQuery, state: FSMContext):
-    plat_key = cb.data.replace("plat_","")
-    data  = await state.get_data()
-    sheet = storage.add_mother_sheet(data["sheet_id"], data["sheet_name"], data["script_id"], plat_key)
+    plat_key = cb.data.replace("plat_", "")
+    data     = await state.get_data()
+    sheet    = storage.add_mother_sheet(data["sheet_id"], data["sheet_name"], data["script_id"], plat_key)
     await state.clear()
     await cb.message.edit_text(
         f"✅ *{sheet['name']}* added!\nPlatform: {PLATFORMS[plat_key]['name']}\nLibrary: `{sheet['library_symbol']}`",
-        parse_mode="Markdown", reply_markup=kb_admin_home()); await cb.answer()
+        parse_mode="Markdown",
+        reply_markup=kb_admin_home(),
+    )
+    await cb.answer()
+
 
 @router.callback_query(F.data.startswith("adm_s_"))
 async def cb_view_sheet(cb: CallbackQuery):
-    if not storage.is_admin(cb.from_user.id): return await cb.answer("No access", show_alert=True)
-    sid = cb.data.replace("adm_s_",""); s = storage.get_mother_sheet(sid)
-    if not s: return await cb.answer("Not found", show_alert=True)
+    if not storage.is_admin(cb.from_user.id):
+        return await cb.answer("No access", show_alert=True)
+    sid = cb.data.replace("adm_s_", "")
+    s   = storage.get_mother_sheet(sid)
+    if not s:
+        return await cb.answer("Not found", show_alert=True)
     await cb.message.edit_text(
         f"📋 *{s['name']}*\nPlatform: {PLATFORMS.get(s['platform'],{}).get('name','?')}\n"
         f"Library: `{s['library_symbol']}`\nScript ID: `{s['script_id']}`",
         parse_mode="Markdown",
-        reply_markup=_ik([_btn("🗑 Remove", f"adm_rmsheet_{sid}"), _btn("◀️ Back","adm_sheets")])); await cb.answer()
+        reply_markup=_ik([_btn("🗑 Remove", f"adm_rmsheet_{sid}"), _btn("◀️ Back", "adm_sheets")]),
+    )
+    await cb.answer()
+
 
 @router.callback_query(F.data.startswith("adm_rmsheet_"))
 async def cb_rm_sheet(cb: CallbackQuery):
-    if not storage.is_admin(cb.from_user.id): return await cb.answer("No access", show_alert=True)
-    storage.remove_mother_sheet(cb.data.replace("adm_rmsheet_",""))
-    await cb.answer("Removed"); await cb_adm_sheets(cb)
+    if not storage.is_admin(cb.from_user.id):
+        return await cb.answer("No access", show_alert=True)
+    storage.remove_mother_sheet(cb.data.replace("adm_rmsheet_", ""))
+    await cb.answer("Removed")
+    await cb_adm_sheets(cb)
 
-# ── assign ────────────────────────────────────────────────────
 
 @router.callback_query(F.data == "adm_assign_sel")
 async def cb_assign_sel(cb: CallbackQuery):
-    if not storage.is_admin(cb.from_user.id): return await cb.answer("No access", show_alert=True)
+    if not storage.is_admin(cb.from_user.id):
+        return await cb.answer("No access", show_alert=True)
     pp = storage.all_partners()
-    if not pp: return await cb.answer("No partners yet", show_alert=True)
-    rows = [[_btn(p["name"], f"adm_assign_{uid}")] for uid,p in pp.items()]
-    rows.append([_btn("◀️ Back","adm_home")])
-    await cb.message.edit_text("Select partner:", reply_markup=_ik(*rows)); await cb.answer()
+    if not pp:
+        return await cb.answer("No partners yet", show_alert=True)
+    rows = [[_btn(p["name"], f"adm_assign_{uid}")] for uid, p in pp.items()]
+    rows.append([_btn("◀️ Back", "adm_home")])
+    await cb.message.edit_text("Select partner:", reply_markup=_ik(*rows))
+    await cb.answer()
+
 
 @router.callback_query(F.data.startswith("adm_assign_"))
 async def cb_assign(cb: CallbackQuery):
-    if not storage.is_admin(cb.from_user.id): return await cb.answer("No access", show_alert=True)
-    uid = int(cb.data.replace("adm_assign_",""))
-    p   = storage.get_partner(uid); ss = storage.all_mother_sheets()
-    if not p or not ss: return await cb.answer("Nothing to assign", show_alert=True)
-    await cb.message.edit_text(f"Toggle sheets for *{p['name']}* (✅ = assigned):", parse_mode="Markdown",
-                                reply_markup=kb_assign_sheets(p, ss)); await cb.answer()
+    if not storage.is_admin(cb.from_user.id):
+        return await cb.answer("No access", show_alert=True)
+    uid = int(cb.data.replace("adm_assign_", ""))
+    p   = storage.get_partner(uid)
+    ss  = storage.all_mother_sheets()
+    if not p or not ss:
+        return await cb.answer("Nothing to assign", show_alert=True)
+    await cb.message.edit_text(
+        f"Toggle sheets for *{p['name']}* (✅ = assigned):",
+        parse_mode="Markdown",
+        reply_markup=kb_assign_sheets(p, ss),
+    )
+    await cb.answer()
+
 
 @router.callback_query(F.data.startswith("assign_"))
 async def cb_do_assign(cb: CallbackQuery):
-    if not storage.is_admin(cb.from_user.id): return await cb.answer("No access", show_alert=True)
-    _, uid_s, sid = cb.data.split("_",2)
-    storage.assign_sheet(int(uid_s), sid); await cb.answer("Assigned ✅")
-    cb.data = f"adm_assign_{uid_s}"; await cb_assign(cb)
+    if not storage.is_admin(cb.from_user.id):
+        return await cb.answer("No access", show_alert=True)
+    _, uid_s, sid = cb.data.split("_", 2)
+    storage.assign_sheet(int(uid_s), sid)
+    await cb.answer("Assigned ✅")
+    cb.data = f"adm_assign_{uid_s}"
+    await cb_assign(cb)
+
 
 @router.callback_query(F.data.startswith("unassign_"))
 async def cb_do_unassign(cb: CallbackQuery):
-    if not storage.is_admin(cb.from_user.id): return await cb.answer("No access", show_alert=True)
-    _, uid_s, sid = cb.data.split("_",2)
-    storage.unassign_sheet(int(uid_s), sid); await cb.answer("Unassigned")
-    cb.data = f"adm_assign_{uid_s}"; await cb_assign(cb)
+    if not storage.is_admin(cb.from_user.id):
+        return await cb.answer("No access", show_alert=True)
+    _, uid_s, sid = cb.data.split("_", 2)
+    storage.unassign_sheet(int(uid_s), sid)
+    await cb.answer("Unassigned")
+    cb.data = f"adm_assign_{uid_s}"
+    await cb_assign(cb)
+
 
 # ── partner ───────────────────────────────────────────────────
 
 @router.callback_query(F.data == "p_home")
 async def cb_p_home(cb: CallbackQuery):
     p = storage.get_partner(cb.from_user.id)
-    if not p: return await cb.answer("No access", show_alert=True)
-    await cb.message.edit_text(f"🏠 *{p['name']}*", parse_mode="Markdown", reply_markup=kb_partner_home()); await cb.answer()
+    if not p:
+        return await cb.answer("No access", show_alert=True)
+    await cb.message.edit_text(f"🏠 *{p['name']}*", parse_mode="Markdown", reply_markup=kb_partner_home())
+    await cb.answer()
+
 
 @router.callback_query(F.data == "p_create")
 async def cb_p_create(cb: CallbackQuery, state: FSMContext):
     p = storage.get_partner(cb.from_user.id)
-    if not p or not p.get("active"): return await cb.answer("Account not active", show_alert=True)
+    if not p or not p.get("active"):
+        return await cb.answer("Account not active", show_alert=True)
     sheets = storage.partner_assigned_sheets(cb.from_user.id)
-    if not sheets: return await cb.answer("No sheets assigned — contact admin", show_alert=True)
-    await cb.message.edit_text("Select the *analytics platform*:", parse_mode="Markdown", reply_markup=kb_select_mother(sheets))
-    await state.set_state(PartnerSt.pick_mother); await cb.answer()
+    if not sheets:
+        return await cb.answer("No sheets assigned — contact admin", show_alert=True)
+    await cb.message.edit_text(
+        "Select the *analytics platform*:",
+        parse_mode="Markdown",
+        reply_markup=kb_select_mother(sheets),
+    )
+    await state.set_state(PartnerSt.pick_mother)
+    await cb.answer()
+
 
 @router.callback_query(PartnerSt.pick_mother, F.data.startswith("p_mother_"))
 async def cb_pick_mother(cb: CallbackQuery, state: FSMContext):
-    sid    = cb.data.replace("p_mother_","")
+    sid    = cb.data.replace("p_mother_", "")
     mother = storage.get_mother_sheet(sid)
-    if not mother: return await cb.answer("Not found", show_alert=True)
+    if not mother:
+        return await cb.answer("Not found", show_alert=True)
     p = storage.get_partner(cb.from_user.id)
-    if sid not in p.get("assigned_sheet_ids",[]): return await cb.answer("No access", show_alert=True)
+    if sid not in p.get("assigned_sheet_ids", []):
+        return await cb.answer("No access", show_alert=True)
     plat_key = mother["platform"]
     await state.update_data(mother_id=sid, platform_key=plat_key, config={})
     step = _next_step(plat_key, {})
-    if step: await _send_step(cb, state, plat_key, {}, step)
-    else:    await _show_confirm(cb, state)
+    if step:
+        await _send_step(cb, state, plat_key, {}, step)
+    else:
+        await _show_confirm(cb, state)
     await cb.answer()
+
 
 @router.callback_query(PartnerSt.config_step, F.data.startswith("fld_"))
 async def cb_wizard(cb: CallbackQuery, state: FSMContext):
-    raw = cb.data[4:]; sep = raw.index("__"); field = raw[:sep]; value = raw[sep+2:]
-    data = await state.get_data()
-    config = data.get("config",{}); config[field] = value
+    raw   = cb.data[4:]
+    sep   = raw.index("__")
+    field = raw[:sep]
+    value = raw[sep + 2:]
+    data  = await state.get_data()
+    config = data.get("config", {})
+    config[field] = value
     await state.update_data(config=config)
     nxt = _next_step(data["platform_key"], config)
-    if nxt: await _send_step(cb, state, data["platform_key"], config, nxt)
-    else:   await _show_confirm(cb, state)
+    if nxt:
+        await _send_step(cb, state, data["platform_key"], config, nxt)
+    else:
+        await _show_confirm(cb, state)
     await cb.answer()
+
 
 async def _show_confirm(cb, state):
     data   = await state.get_data()
-    config = data.get("config",{})
+    config = data.get("config", {})
     mother = storage.get_mother_sheet(data["mother_id"])
     plat   = PLATFORMS[data["platform_key"]]
-    lines  = "\n".join(f"  `{k}` → `{v}`" for k,v in config.items())
+    lines  = "\n".join(f"  `{k}` → `{v}`" for k, v in config.items())
     await cb.message.edit_text(
-        f"📋 *Confirm*\n\nPlatform: {plat['name']}\nSource: {mother['name']}\nLibrary: `{plat['library_symbol']}`\n\n{lines}\n\nCreate?",
-        parse_mode="Markdown", reply_markup=kb_confirm())
+        f"📋 *Confirm*\n\nPlatform: {plat['name']}\nSource: {mother['name']}\n"
+        f"Library: `{plat['library_symbol']}`\n\n{lines}\n\nCreate?",
+        parse_mode="Markdown",
+        reply_markup=kb_confirm(),
+    )
     await state.set_state(PartnerSt.confirm)
+
 
 @router.callback_query(PartnerSt.confirm, F.data == "do_create")
 async def cb_do_create(cb: CallbackQuery, state: FSMContext):
@@ -717,43 +895,64 @@ async def cb_do_create(cb: CallbackQuery, state: FSMContext):
     p      = storage.get_partner(cb.from_user.id)
     mother = storage.get_mother_sheet(data["mother_id"])
     plat   = PLATFORMS[data["platform_key"]]
-    await cb.message.edit_text("⏳ Creating spreadsheet… (~30–60 sec)"); await cb.answer()
+    await cb.message.edit_text("⏳ Creating spreadsheet… (~30–60 sec)")
+    await cb.answer()
     try:
-        child = await asyncio.to_thread(gapi.create_child_sheet,
-                                        partner_name=p["name"],
-                                        platform_key=data["platform_key"],
-                                        mother=mother)
+        child = await asyncio.to_thread(
+            gapi.create_child_sheet,
+            partner_name=p["name"],
+            platform_key=data["platform_key"],
+            mother=mother,
+        )
         storage.add_child_sheet(cb.from_user.id, child)
         await cb.message.edit_text(
             f"✅ *Sheet ready!*\n\n🔗 [Open Spreadsheet]({child['spreadsheet_url']})\n\n"
             f"Platform: {plat['name']}\nLibrary: `{plat['library_symbol']}`\n\n"
             f"_Next: paste raw data → Raw Data tab → run 📊 ANALYSIS_",
-            parse_mode="Markdown", reply_markup=kb_partner_home())
+            parse_mode="Markdown",
+            reply_markup=kb_partner_home(),
+        )
     except Exception as exc:
         log.exception("create_child_sheet failed")
         await cb.message.edit_text(
             f"❌ Failed.\n\n`{str(exc)[:400]}`\n\nContact admin.",
-            parse_mode="Markdown", reply_markup=kb_partner_home())
+            parse_mode="Markdown",
+            reply_markup=kb_partner_home(),
+        )
     await state.clear()
+
 
 @router.callback_query(F.data == "p_mysheets")
 async def cb_mysheets(cb: CallbackQuery):
     p = storage.get_partner(cb.from_user.id)
-    if not p: return await cb.answer("No access", show_alert=True)
-    kids = p.get("child_sheets",[])
-    if not kids: await cb.message.edit_text("No sheets yet.", reply_markup=kb_partner_home())
-    else: await cb.message.edit_text(f"📋 *Your Sheets* ({len(kids)})", parse_mode="Markdown", reply_markup=kb_partner_sheets(kids))
+    if not p:
+        return await cb.answer("No access", show_alert=True)
+    kids = p.get("child_sheets", [])
+    if not kids:
+        await cb.message.edit_text("No sheets yet.", reply_markup=kb_partner_home())
+    else:
+        await cb.message.edit_text(
+            f"📋 *Your Sheets* ({len(kids)})",
+            parse_mode="Markdown",
+            reply_markup=kb_partner_sheets(kids),
+        )
     await cb.answer()
+
 
 @router.callback_query(F.data.startswith("p_child_"))
 async def cb_view_child(cb: CallbackQuery):
-    sid = cb.data.replace("p_child_",""); p = storage.get_partner(cb.from_user.id)
-    c   = next((x for x in p.get("child_sheets",[]) if x["spreadsheet_id"]==sid), None)
-    if not c: return await cb.answer("Not found", show_alert=True)
-    plat = PLATFORMS.get(c.get("platform",""),{})
+    sid = cb.data.replace("p_child_", "")
+    p   = storage.get_partner(cb.from_user.id)
+    c   = next((x for x in p.get("child_sheets", []) if x["spreadsheet_id"] == sid), None)
+    if not c:
+        return await cb.answer("Not found", show_alert=True)
+    plat = PLATFORMS.get(c.get("platform", ""), {})
     await cb.message.edit_text(
-        f"📊 *{plat.get('name','?')}*\nCreated: {c.get('created_at','')[:10]}\n\n🔗 [Open]({c['spreadsheet_url']})",
-        parse_mode="Markdown", reply_markup=_ik([_btn("◀️ Back","p_mysheets")])); await cb.answer()
+        f"📊 *{plat.get('name', '?')}*\nCreated: {c.get('created_at', '')[:10]}\n\n🔗 [Open]({c['spreadsheet_url']})",
+        parse_mode="Markdown",
+        reply_markup=_ik([_btn("◀️ Back", "p_mysheets")]),
+    )
+    await cb.answer()
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -765,12 +964,14 @@ async def main():
     assert BOT_TOKEN, "BOT_TOKEN env var is not set"
     storage = Storage(DATA_FILE)
     gapi    = GoogleAPI(SERVICE_ACCOUNT_FILE)
-    if FIRST_ADMIN_ID: storage.add_admin(FIRST_ADMIN_ID)
+    if FIRST_ADMIN_ID:
+        storage.add_admin(FIRST_ADMIN_ID)
     bot = Bot(token=BOT_TOKEN)
     dp  = Dispatcher(storage=MemoryStorage())
     dp.include_router(router)
     log.info("Bot started")
-    await dp.start_polling(bot, allowed_updates=["message","callback_query"])
+    await dp.start_polling(bot, allowed_updates=["message", "callback_query"])
+
 
 if __name__ == "__main__":
     asyncio.run(main())
